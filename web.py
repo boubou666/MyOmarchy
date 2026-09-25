@@ -125,8 +125,16 @@ def built_isos() -> list[dict]:
     release = myomarchy.CHECKOUT / "release"
     if not release.is_dir():
         return []
-    return [{"name": p.name, "size": p.stat().st_size}
-            for p in sorted(release.glob("*.iso"), key=lambda item: item.stat().st_mtime, reverse=True)]
+    found = []
+    for iso in sorted(release.glob("omarchy-custom-*.iso"),
+                      key=lambda item: item.stat().st_mtime, reverse=True):
+        try:
+            report = myomarchy.verified_release(iso)
+        except myomarchy.ToolError:
+            continue
+        found.append({"name": iso.name, "size": iso.stat().st_size,
+                      "packages": [item["name"] for item in report["packages"]]})
+    return found
 
 
 def usb_disks() -> list[dict]:

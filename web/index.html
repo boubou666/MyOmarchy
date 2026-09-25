@@ -224,7 +224,7 @@
         renderCatalogStatus(catalog);
         $('jobState').textContent = busy ? result.job.name : result.job.exit_code === 0 ? 'Complete' : result.job.exit_code === null ? 'Ready' : 'Failed';
         $('logs').textContent = result.job.logs.length ? result.job.logs.join('\n') : 'Select packages to begin.';
-        populate($('iso'), result.isos, 'name', item => `${item.name} · ${(item.size / 1073741824).toFixed(1)} GiB`);
+        populate($('iso'), result.isos, 'name', item => `${item.name} · verified ${item.packages.length} selected package(s) · ${(item.size / 1073741824).toFixed(1)} GiB`);
         populate($('device'), result.usb, 'path', item => `${item.path} · ${item.model || 'USB disk'} · ${(item.size / 1073741824).toFixed(1)} GiB`);
       } catch (error) { message(error.message, true); }
     }

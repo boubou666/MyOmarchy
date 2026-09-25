@@ -2,7 +2,7 @@
 
 MyOmarchy is a local web page for building an Omarchy installer ISO with extra pacman packages. It puts those packages and their dependencies in the ISO's offline mirror, so the **destination computer can install without internet**. The computer that builds the ISO needs internet.
 
-This is an experimental project. It has not yet completed a full ISO build and offline installation test. Verify a generated ISO in a VM before using it on a machine you care about.
+This is an experimental project. A full Stable ISO build with `firefox` and `emacs-nox` passed the finished-image package check on 2026-09-25. A complete offline installation in a VM has not yet been tested. Verify a generated ISO in a network-disabled VM before using it on a machine you care about.
 
 ## Requirements
 
@@ -25,7 +25,7 @@ The build container uses privileged mode because Omarchy's official builder runs
    On Windows, `python web.py` may be the right command. The default address is <http://127.0.0.1:8765/>. The server binds only to `127.0.0.1`.
 
 2. Pick **Current Stable**, **Current Release Candidate**, **Current Development**, or a pinned numbered release. Search packages with autocomplete and save your choices. The catalog comes from the selected channel's real pacman databases and is cached for 24 hours.
-3. Start Docker Desktop from the page if needed, then click **Build custom ISO**. Watch the Activity panel. The ISO and `.sha256` file appear in `.build/omarchy-iso/release/`.
+3. Start Docker Desktop from the page if needed, then click **Build custom ISO**. Watch the Activity panel. The ISO, `.sha256` checksum, and `.verification.json` package report appear in `.build/omarchy-iso/release/` after verification succeeds.
 4. Write the ISO to a USB drive. On Linux, the page can list a removable USB disk, write it, and verify the result after you type the exact `ERASE /dev/...` confirmation. On Windows or macOS, use an ISO writer such as [balenaEtcher](https://etcher.balena.io/) with the generated ISO.
 5. Boot the destination computer from the USB and use Omarchy's installer. No network connection should be needed during that installation.
 
@@ -65,11 +65,11 @@ The source checkout is copied into `.build/omarchy-iso`; it is not edited. Witho
 
 ## How it works and limits
 
-The tool patches a private copy of [Omarchy's ISO builder](https://github.com/omacom/omarchy-iso) to append selected packages to the target install list and resolve them into the offline mirror. Omarchy's installer [reads that shipped list](https://github.com/omacom/omarchy-iso/blob/quattro/configs/airootfs/usr/share/omarchy-iso/orchestrator/phases_impl.py). The integration stops if the upstream build steps change in ways it does not recognize.
+The tool patches a private copy of [Omarchy's ISO builder](https://github.com/omacom/omarchy-iso) to append selected packages to the target install list and resolve them into the offline mirror. The mirror is storage for package archives and dependencies **inside the ISO**. During installation, Omarchy's installer [reads that shipped list](https://github.com/omacom/omarchy-iso/blob/quattro/configs/airootfs/usr/share/omarchy-iso/orchestrator/phases_impl.py) and installs the packages into the destination system with pacman. Installing them into the live USB environment instead would not put them on the destination disk. The integration stops if the upstream build or installer handoff changes in ways it does not recognize.
 
-Scope: x86_64, pacman packages in the chosen channel, and one package selection per ISO. AUR packages, Flatpaks, downloads an application may perform on first launch, and unattended disk configuration are not bundled. Docker Desktop does not automatically expose a host USB disk to the build container.
+Scope: x86_64, pacman packages in the chosen channel, and one package selection per ISO. AUR packages, Flatpaks, downloads an application may perform on first launch, and unattended disk configuration are not bundled. Docker Desktop does not automatically expose a host USB disk to the build container. The current T2 Mac repository replaced `apple-bcm-firmware` with `apple-bcm-firmware-fetcher`; the builder uses that replacement for the optional package inventory. T2 Mac firmware setup and installation have not been verified offline.
 
-The builder verifies that target packages resolve from the ISO's offline mirror. For a fuller check, boot the ISO in a VM with networking disabled and complete an installation. This remains to be done for this project.
+The builder first verifies that target packages resolve from the offline mirror. After `mkarchiso`, MyOmarchy opens the finished ISO, checks the live filesystem checksum, confirms every selected name appears in the install list, checks the installed copy of the installer for the package-list handoff, and hashes each selected package archive against the bundled repository database. A failed check prevents the ISO from appearing as a completed build. Before Linux USB writing, the whole ISO is hashed against its saved SHA256 checksum; the written USB is then read back and compared. This proves the selected package files and installer list are present in the ISO, but cannot prove that every step of a real installation succeeds. For that, boot the ISO in a VM with networking disabled and complete an installation; this remains to be done for this project.
 
 ## Changelog and releases
 

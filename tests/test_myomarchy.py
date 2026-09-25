@@ -15,6 +15,7 @@ mapfile -t all_packages < <(
     grep -hv '^#\\|^$' "${base_pkg_lists[@]}"
   } | sort -u
 )
+mkarchiso -v -w "$build_cache_dir/work/" -o /out/ "$build_cache_dir/"
 """
 
 
@@ -30,12 +31,16 @@ class MyOmarchyTests(unittest.TestCase):
     def test_builder_bundles_and_installs_same_selection(self):
         patched = myomarchy.patch_builder(BUILDER)
         self.assertIn("cat /builder/myomarchy.packages >>", patched)
+        self.assertIn("apple-bcm-firmware-fetcher", patched)
         self.assertIn(myomarchy.SHIPPED_LIST, patched)
         self.assertNotIn(myomarchy.SOURCE_LIST, patched)
+        self.assertIn('python /builder/myomarchy-verify.py', patched)
 
     def test_builder_drift_fails_closed(self):
         with self.assertRaises(myomarchy.ToolError):
             myomarchy.patch_builder(BUILDER.replace(myomarchy.SOURCE_LIST, "echo changed"))
+        with self.assertRaises(myomarchy.ToolError):
+            myomarchy.patch_builder(BUILDER.replace(myomarchy.ISO_BUILD_LINE, "echo changed"))
         with self.assertRaises(myomarchy.ToolError):
             myomarchy.patch_builder(myomarchy.patch_builder(BUILDER))
 

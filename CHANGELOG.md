@@ -4,6 +4,24 @@ All notable changes to MyOmarchy are recorded here. This file follows the [Keep 
 
 ## Unreleased
 
+## 0.1.1 - 2026-09-25
+
+### Added
+
+- Finished ISO verification of selected install-list entries, offline package archives, repository checksums, and the live filesystem checksum.
+- Per-ISO verification reports; the page lists only completed verified builds and checks the ISO checksum before Linux USB writing.
+- Compatibility mapping for the T2 repository's replacement of `apple-bcm-firmware` with `apple-bcm-firmware-fetcher`, with an explicit T2 limitation.
+- Successful Stable ISO build with `firefox` and `emacs-nox`, with both package archives checked in the finished image.
+
+### Changed
+
+- Documented how the local repository supplies packages that Omarchy installs into the destination system.
+
+### Known limitations
+
+- A complete network-disabled installation has not yet been tested in a VM.
+- T2 Mac firmware setup and installation have not been verified offline.
+
 ## 0.1.0 - 2026-09-25
 
 ### Added

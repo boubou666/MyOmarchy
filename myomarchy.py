@@ -32,7 +32,26 @@ SHIPPED_LIST = (
     '"$build_cache_dir/airootfs/usr/share/omarchy-iso/omarchy-base.packages" '
     '"$build_cache_dir/airootfs/usr/share/omarchy-iso/omarchy-other.packages"'
 )
+ISO_BUILD_LINE = 'mkarchiso -v -w "$build_cache_dir/work/" -o /out/ "$build_cache_dir/"'
+ISO_VERIFICATION = """# MyOmarchy: inspect the finished ISO, not just the builder staging tree.
+myomarchy_build_marker=$(mktemp)
+mkarchiso -v -w "$build_cache_dir/work/" -o /out/ "$build_cache_dir/"
+myomarchy_iso=$(find /out -maxdepth 1 -type f -name '*.iso' -newer "$myomarchy_build_marker" -print -quit)
+rm -f "$myomarchy_build_marker"
+if [[ -z $myomarchy_iso ]]; then
+  echo "ERROR: no newly built ISO to verify" >&2
+  exit 1
+fi
+pacman --noconfirm -S --needed python
+python /builder/myomarchy-verify.py "$myomarchy_iso" /builder/myomarchy.packages"""
+INSTALLER_CALL = "installer.add_additional_packages(_runtime_package_list(ctx))"
 INJECTION = """# MyOmarchy: include selected packages in the target install list.
+# The T2 repository removed apple-bcm-firmware. Keep the optional offline
+# inventory resolvable with its on-disk firmware fetcher replacement.
+if grep -Fxq apple-bcm-firmware "$build_cache_dir/airootfs/usr/share/omarchy-iso/omarchy-other.packages"; then
+  sed -i 's/^apple-bcm-firmware$/apple-bcm-firmware-fetcher/' "$build_cache_dir/airootfs/usr/share/omarchy-iso/omarchy-other.packages"
+  echo "Note: apple-bcm-firmware is unavailable; bundling apple-bcm-firmware-fetcher instead. T2 Mac firmware setup is unverified."
+fi
 if [[ -s /builder/myomarchy.packages ]]; then
   printf '\\n' >> "$build_cache_dir/airootfs/usr/share/omarchy-iso/omarchy-base.packages"
   cat /builder/myomarchy.packages >> "$build_cache_dir/airootfs/usr/share/omarchy-iso/omarchy-base.packages"
@@ -99,10 +118,13 @@ def patch_builder(original: str) -> str:
         raise ToolError("Upstream ISO builder changed its package-copy step; review the integration")
     if original.count(SOURCE_LIST) != 1:
         raise ToolError("Upstream ISO builder changed its mirror package list; review the integration")
+    if original.count(ISO_BUILD_LINE) != 1:
+        raise ToolError("Upstream ISO builder changed its ISO output step; review the integration")
     if original.count(SHIPPED_LIST) or "# MyOmarchy:" in original:
         raise ToolError("The upstream builder is already customized")
     patched = original.replace(COPY_OTHER, COPY_OTHER + "\n" + INJECTION, 1)
     patched = patched.replace(SOURCE_LIST, SHIPPED_LIST, 1)
+    patched = patched.replace(ISO_BUILD_LINE, ISO_VERIFICATION, 1)
     return patched
 
 
@@ -132,9 +154,16 @@ def prepare(package_file: Path, source: Path | None, target: versions.Target | N
         original_file.write_text(original, encoding="utf-8", newline="\n")
     original = original_file.read_text(encoding="utf-8")
     builder.write_text(patch_builder(original), encoding="utf-8", newline="\n")
+    installer = CHECKOUT / "configs/airootfs/usr/share/omarchy-iso/orchestrator/phases_impl.py"
+    installer_source = installer.read_text(encoding="utf-8")
+    if installer_source.count(INSTALLER_CALL) != 1 or installer_source.count(
+        'Path("/usr/share/omarchy-iso/omarchy-base.packages")'
+    ) != 1:
+        raise ToolError("Upstream installer changed how it installs the shipped package list")
     (CHECKOUT / "builder/myomarchy.packages").write_text(
         "\n".join(packages) + "\n", encoding="utf-8", newline="\n"
     )
+    shutil.copyfile(ROOT / "verify_iso.py", CHECKOUT / "builder/myomarchy-verify.py")
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=CHECKOUT, text=True,
         capture_output=True, check=True
@@ -211,13 +240,26 @@ def build(package_file: Path, source: Path | None, target: versions.Target | Non
     if not isos:
         raise ToolError("Builder finished but did not produce a new ISO")
     iso = max(isos, key=lambda p: p.stat().st_mtime_ns)
+    report_path = iso.with_name(iso.name + ".verification.json")
+    if not report_path.is_file():
+        raise ToolError("Builder did not leave an ISO verification report")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    if (report.get("iso") != iso.name or
+            {item["name"] for item in report.get("packages", [])} != set(packages)):
+        raise ToolError("ISO verification report does not match the selected packages")
     revision = json.loads((WORK / "manifest.json").read_text(encoding="utf-8"))["upstream_revision"]
     selection_hash = hashlib.sha256("\n".join(packages).encode("utf-8")).hexdigest()[:8]
     final_iso = release / f"omarchy-custom-{target.key}-{revision[:8]}-{selection_hash}.iso"
     if iso != final_iso:
         iso.replace(final_iso)
+        new_report = final_iso.with_name(final_iso.name + ".verification.json")
+        report_path.replace(new_report)
+        report_path = new_report
     iso = final_iso
     digest = sha256_file(iso)
+    report["iso"] = iso.name
+    report["iso_sha256"] = digest
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     (iso.parent / (iso.name + ".sha256")).write_text(
         f"{digest}  {iso.name}\n", encoding="ascii"
     )
@@ -269,6 +311,28 @@ def sha256_file(path: Path, limit: int | None = None) -> str:
     return digest.hexdigest()
 
 
+def verified_release(iso: Path, check_digest: bool = False) -> dict:
+    """Require a matching report and sidecar before exposing or flashing an ISO."""
+    if not iso.is_file() or not iso.name.startswith("omarchy-custom-") or iso.suffix != ".iso":
+        raise ToolError("Choose a completed MyOmarchy ISO")
+    report_path = iso.with_name(iso.name + ".verification.json")
+    checksum_path = iso.with_name(iso.name + ".sha256")
+    try:
+        report = json.loads(report_path.read_text(encoding="utf-8"))
+        checksum = checksum_path.read_text(encoding="ascii").strip().split()
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise ToolError("ISO verification report or checksum is missing") from exc
+    if (report.get("iso") != iso.name or not isinstance(report.get("packages"), list)
+            or not report["packages"] or any(not isinstance(item, dict) or not item.get("name")
+                                              for item in report["packages"])
+            or len(checksum) != 2 or checksum[1] != iso.name
+            or checksum[0] != report.get("iso_sha256")):
+        raise ToolError("ISO verification report and checksum disagree")
+    if check_digest and sha256_file(iso) != checksum[0]:
+        raise ToolError("ISO checksum differs from the verified build")
+    return report
+
+
 def device_info(device: str) -> dict:
     if sys.platform != "linux":
         raise ToolError("USB writing is supported on Linux only")
@@ -298,6 +362,7 @@ def device_info(device: str) -> dict:
 def flash(iso: Path, device: str, confirmation: str | None = None) -> None:
     if not iso.is_file() or iso.suffix.lower() != ".iso":
         raise ToolError(f"ISO file not found: {iso}")
+    verified_release(iso, check_digest=True)
     disk = device_info(device)
     if int(disk["size"]) < iso.stat().st_size:
         raise ToolError("USB disk is smaller than the ISO")
