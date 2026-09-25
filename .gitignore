@@ -1,0 +1,8 @@
+.build/
+upstream/
+__pycache__/
+*.pyc
+packages.txt
+target.txt
+tmp*/
+.DS_Store

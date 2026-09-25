@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyOmarchy · Offline installer builder</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif; background: #0d1115; color: #e9eee9; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { margin: 0; }
+    .wrap { max-width: 1380px; height: 100dvh; margin: auto; padding: 16px 20px; display: flex; flex-direction: column; overflow: hidden; }
+    header { display: flex; justify-content: space-between; gap: 24px; align-items: center; margin-bottom: 14px; flex: 0 0 auto; }
+    main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .brand { display: flex; gap: 11px; align-items: center; font-weight: 760; letter-spacing: -.035em; font-size: 19px; }
+    .mark { width: 29px; height: 29px; border-radius: 9px; background: #c5f277; color: #18240b; display: grid; place-items: center; font-size: 18px; font-weight: 900; }
+    .local { color: #a3baac; font-size: 12px; border: 1px solid #304138; border-radius: 100px; padding: 8px 12px; }
+    .local:before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; background: #c5f277; border-radius: 50%; }
+    .eyebrow { color: #a6d769; text-transform: uppercase; letter-spacing: .18em; font-size: 11px; font-weight: 800; }
+    h1 { font-size: clamp(29px, 3vw, 42px); letter-spacing: -.065em; line-height: 1.06; margin: 5px 0 5px; max-width: 760px; }
+    .lede { color: #aab4ad; font-size: 12px; line-height: 1.45; max-width: 850px; margin: 0 0 14px; }
+    .steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: 1; min-height: 0; }
+    section { background: #151c1b; border: 1px solid #2b3732; border-radius: 16px; padding: 18px; min-width: 0; min-height: 0; overflow: auto; }
+    .step { color: #9dc968; font: 700 11px ui-monospace, SFMono-Regular, Consolas, monospace; margin-bottom: 12px; }
+    h2 { font-size: 21px; letter-spacing: -.045em; margin: 0 0 7px; }
+    .hint { color: #9faea5; line-height: 1.45; font-size: 12px; margin: 0 0 15px; }
+    select, input { width: 100%; background: #0c1211; color: #eef4ef; border: 1px solid #394740; border-radius: 10px; padding: 13px 14px; font: inherit; outline: none; }
+    select:focus, input:focus { border-color: #a6d769; box-shadow: 0 0 0 3px #a6d76925; }
+    .searchbox { position: relative; }
+    .suggestions { position: absolute; z-index: 5; top: calc(100% + 5px); left: 0; right: 0; margin: 0; padding: 5px; list-style: none; max-height: 310px; overflow: auto; background: #202b25; border: 1px solid #55704c; border-radius: 11px; box-shadow: 0 20px 40px #0009; }
+    .suggestions[hidden] { display: none; }
+    .suggestions li { padding: 0; }
+    .suggestions button { display: block; text-align: left; padding: 10px 11px; background: transparent; color: #e9eee9; border-radius: 7px; font-weight: 500; }
+    .suggestions button:hover, .suggestions button.active { background: #3a4b3e; transform: none; }
+    .pkgname { display: block; font-weight: 760; font-size: 13px; }
+    .pkgmeta, .pkgdesc { display: block; font-size: 11px; color: #a8b9aa; line-height: 1.45; }
+    .pkgdesc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .selected { min-height: 90px; max-height: min(28vh, 200px); overflow: auto; padding: 9px; margin-top: 12px; border: 1px solid #334239; border-radius: 10px; background: #0c1211; display: flex; align-content: flex-start; align-items: flex-start; flex-wrap: wrap; gap: 7px; }
+    .selected .empty { color: #7d8d80; font-size: 12px; padding: 7px; }
+    .selected button { width: auto; padding: 7px 10px; background: #314139; color: #def4d2; border-radius: 7px; font: 600 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .selected button span { color: #a7bfa9; padding-left: 7px; }
+    .catalogline { color: #9faea5; font-size: 11px; min-height: 18px; margin-top: 9px; }
+    .runtime { margin: 0 0 16px; padding: 12px; background: #0c1211; border: 1px solid #334239; border-radius: 10px; color: #b8cbb8; font-size: 12px; line-height: 1.45; }
+    .runtime button { margin-top: 10px; }
+    .linkbutton { border: 0; background: none; color: #c5f277; padding: 0; width: auto; font-size: 11px; cursor: pointer; }
+    label { display: block; font-size: 12px; font-weight: 700; color: #c8d4cc; margin: 18px 0 8px; }
+    button { border: 0; border-radius: 10px; padding: 13px 16px; font: 750 13px inherit; font-family: inherit; font-weight: 760; cursor: pointer; width: 100%; transition: transform .15s, opacity .15s; }
+    button:hover:not(:disabled) { transform: translateY(-1px); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .primary { color: #152108; background: #c5f277; }
+    .secondary { color: #e5eee8; background: #304139; }
+    .danger { background: #eaa097; color: #2e1010; }
+    .actions { display: flex; gap: 9px; margin-top: 13px; }
+    .actions button { flex: 1; }
+    .status { margin-top: 12px; background: #101715; border: 1px solid #2b3732; border-radius: 16px; padding: 13px 16px; flex: 0 0 152px; min-height: 0; display: flex; flex-direction: column; }
+    .statushead { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 9px; }
+    .status h2 { font-size: 19px; margin: 0; }
+    .pill { font-size: 12px; color: #b8c6b9; background: #26342b; border-radius: 100px; padding: 6px 10px; }
+    pre { margin: 0; padding: 10px; min-height: 0; flex: 1; overflow: auto; background: #080d0c; border-radius: 10px; color: #b9cabc; font: 11px/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .message { min-height: 16px; color: #c5f277; font-size: 11px; margin: 5px 0 0; }
+    .foot { color: #76867b; font-size: 11px; margin-top: 10px; line-height: 1.4; flex: 0 0 auto; }
+    .tabs { display: none; }
+    @media (max-width: 790px) {
+      .wrap { padding: 12px; }
+      header { margin-bottom: 10px; }
+      .lede { margin-bottom: 9px; }
+      .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 8px; }
+      .tabs button { padding: 9px 6px; background: #25332a; color: #b9cbbb; border-radius: 8px; }
+      .tabs button.active { background: #c5f277; color: #152108; }
+      .steps { display: block; }
+      .steps section { display: none; height: 100%; }
+      .steps section.active { display: block; }
+      .status { flex-basis: 126px; margin-top: 8px; }
+      .foot { display: none; }
+    }
+    @media (max-height: 700px) { .lede { display: none; } .status { flex-basis: 112px; } .step { margin-bottom: 7px; } section { padding: 14px; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header><div class="brand"><div class="mark">M</div>MyOmarchy</div><div class="local">Runs on this computer</div></header>
+    <main>
+      <div class="eyebrow">Your packages. One offline installer.</div>
+      <h1>Build Omarchy your way.</h1>
+      <p class="lede">Choose pacman packages while you have internet. Build a custom ISO that carries them and installs them with Omarchy. Once the USB is written, the destination computer needs no connection.</p>
+      <div class="tabs" role="tablist" aria-label="Build steps"><button class="active" data-step="stepSelect" role="tab" aria-selected="true">Select</button><button data-step="stepBuild" role="tab" aria-selected="false">Build</button><button data-step="stepWrite" role="tab" aria-selected="false">Write USB</button></div>
+      <div class="steps">
+        <section id="stepSelect" class="active">
+          <div class="step">01 / SELECT</div>
+          <h2>Choose packages</h2>
+          <p class="hint">Choose an Omarchy release or a current channel, then search its package repository. Dependencies are included automatically.</p>
+          <label for="target">Omarchy version</label><select id="target"></select>
+          <p class="catalogline" id="versionHelp">Checking available versions…</p>
+          <div class="searchbox">
+            <input id="packageSearch" type="search" placeholder="Search packages, e.g. firefox" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestions">
+            <ul id="suggestions" class="suggestions" role="listbox" hidden></ul>
+          </div>
+          <div class="catalogline"><span id="catalogStatus">Loading package catalog…</span> <button class="linkbutton" id="refreshCatalog">Refresh</button></div>
+          <div class="selected" id="selectedPackages"><span class="empty">Your selected packages will appear here.</span></div>
+          <div class="actions"><button class="secondary" id="save">Save selection</button></div>
+        </section>
+        <section id="stepBuild">
+          <div class="step">02 / BUILD</div>
+          <h2>Bundle the ISO</h2>
+          <p class="hint">The official builder downloads package files and their dependencies, creates the offline mirror, and produces the bootable ISO.</p>
+          <div class="catalogline" id="targetStatus"></div>
+          <div class="runtime"><span id="dockerStatus">Checking Docker…</span><button class="secondary" id="startDocker" hidden>Start Docker Desktop</button></div>
+          <button class="primary" id="build">Build custom ISO</button>
+          <p class="foot" id="buildHelp">Requires Docker running Linux containers, Git, internet, and sufficient disk space on this computer.</p>
+        </section>
+        <section id="stepWrite">
+          <div class="step">03 / WRITE</div>
+          <h2>Make the USB</h2>
+          <p class="hint">Select the finished ISO and a removable USB disk. The entire disk will be erased and the written image verified.</p>
+          <label for="iso">Built ISO</label><select id="iso"></select>
+          <label for="device">USB disk</label><select id="device"></select>
+          <label for="confirm">Type ERASE followed by the device path</label><input id="confirm" autocomplete="off" placeholder="ERASE /dev/sdX">
+          <div class="actions"><button class="danger" id="flash">Write USB</button></div>
+        </section>
+      </div>
+      <div class="status">
+        <div class="statushead"><h2>Activity</h2><span class="pill" id="jobState">Ready</span></div>
+        <pre id="logs">Select packages to begin.</pre>
+        <p class="message" id="message" role="status"></p>
+      </div>
+      <p class="foot">Local interface · 127.0.0.1 only · x86_64 Omarchy and selected channel packages. The destination disk is chosen during Omarchy installation.</p>
+    </main>
+  </div>
+  <script>
+    const token = '__TOKEN__';
+    const $ = id => document.getElementById(id);
+    let firstLoad = true;
+    let busy = false;
+    let selected = new Set();
+    let suggestions = [];
+    let activeSuggestion = 0;
+    let searchTimer;
+    async function api(path, body) {
+      const response = await fetch(path, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-MyOmarchy-Token': token}, body: JSON.stringify(body)});
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Request failed');
+      return result;
+    }
+    function message(value, isError = false) { $('message').textContent = value; $('message').style.color = isError ? '#eaa097' : '#c5f277'; }
+    function selectedPackages() { return [...selected]; }
+    async function save() { await api('/api/packages', {packages: selectedPackages(), target: $('target').value}); message('Selection saved.'); }
+    function renderSelected() {
+      const area = $('selectedPackages'); area.replaceChildren();
+      if (!selected.size) { const empty = document.createElement('span'); empty.className = 'empty'; empty.textContent = 'Your selected packages will appear here.'; area.append(empty); }
+      for (const name of selected) {
+        const button = document.createElement('button'); button.type = 'button'; button.title = `Remove ${name}`;
+        button.append(document.createTextNode(name));
+        const cross = document.createElement('span'); cross.textContent = '×'; button.append(cross);
+        button.onclick = () => { selected.delete(name); renderSelected(); };
+        area.append(button);
+      }
+    }
+    function hideSuggestions() { $('suggestions').hidden = true; $('packageSearch').setAttribute('aria-expanded', 'false'); }
+    function renderSuggestions() {
+      const list = $('suggestions'); list.replaceChildren();
+      suggestions.forEach((item, index) => {
+        const row = document.createElement('li'); row.setAttribute('role', 'option');
+        const button = document.createElement('button'); button.type = 'button';
+        button.className = index === activeSuggestion ? 'active' : '';
+        const name = document.createElement('span'); name.className = 'pkgname'; name.textContent = item.name;
+        const meta = document.createElement('span'); meta.className = 'pkgmeta'; meta.textContent = `${item.repo} · ${item.version}`;
+        const description = document.createElement('span'); description.className = 'pkgdesc'; description.textContent = item.description;
+        button.append(name, meta, description); button.onclick = () => addPackage(item.name);
+        row.append(button); list.append(row);
+      });
+      list.hidden = !suggestions.length;
+      $('packageSearch').setAttribute('aria-expanded', String(!!suggestions.length));
+    }
+    function addPackage(name) { selected.add(name); renderSelected(); $('packageSearch').value = ''; hideSuggestions(); $('packageSearch').focus(); }
+    async function searchCatalog(showSuggestions = true) {
+      try {
+        const query = $('packageSearch').value;
+        const target = $('target').value;
+        const result = await (await fetch(`/api/catalog?target=${encodeURIComponent(target)}&q=${encodeURIComponent(query)}`, {cache: 'no-store'})).json();
+        if (query !== $('packageSearch').value || target !== $('target').value) return;
+        suggestions = result.packages.filter(item => !selected.has(item.name)); activeSuggestion = 0;
+        if (showSuggestions) renderSuggestions(); else hideSuggestions();
+        renderCatalogStatus(result.catalog);
+      } catch (error) { message(error.message, true); }
+    }
+    function renderCatalogStatus(catalog) {
+      $('catalogStatus').textContent = catalog.refreshing ? `Updating package catalog… ${catalog.count ? `${catalog.count.toLocaleString()} cached` : ''}` :
+        catalog.error ? `Catalog update failed: ${catalog.error}` :
+        catalog.count ? `${catalog.count.toLocaleString()} available packages · ${new Date(catalog.updated_at * 1000).toLocaleDateString()}` : 'Package catalog unavailable';
+    }
+    function populate(select, items, key, label) {
+      const previous = select.value;
+      select.replaceChildren();
+      if (!items.length) { const option = new Option('None available', ''); select.add(option); }
+      for (const item of items) select.add(new Option(label(item), item[key]));
+      if (items.some(item => item[key] === previous)) select.value = previous;
+    }
+    async function refresh() {
+      try {
+        const result = await (await fetch('/api/state', {cache: 'no-store'})).json();
+        if (firstLoad) {
+          selected = new Set(result.packages); renderSelected();
+          for (const item of result.targets) $('target').add(new Option(item.label, item.key));
+          $('target').value = result.target;
+          firstLoad = false;
+        }
+        const chosen = result.targets.find(item => item.key === $('target').value);
+        const catalog = result.catalogs[chosen.channel];
+        $('versionHelp').textContent = chosen.pinned ?
+          `Pinned ${chosen.label}; extra packages come from the current Stable mirror.` :
+          `Current ${chosen.channel} channel${catalog.omarchy_version ? ` · Omarchy ${catalog.omarchy_version}` : ''}.`;
+        $('targetStatus').textContent = `Selected: ${chosen.label}${catalog.omarchy_version && !chosen.pinned ? ` · ${catalog.omarchy_version}` : ''}`;
+        busy = result.job.running;
+        $('save').disabled = busy;
+        $('build').disabled = busy || !result.docker.ready;
+        $('startDocker').hidden = result.docker.ready || !result.docker.desktop_available;
+        $('startDocker').disabled = busy;
+        $('dockerStatus').textContent = result.docker.ready ? 'Docker is ready with Linux containers.' :
+          !result.docker.installed ? 'Docker is not installed.' :
+          result.docker.mode === 'windows' ? 'Docker is running Windows containers. Switch to Linux containers in Docker Desktop.' :
+          result.docker.desktop_available ? 'Docker Desktop is stopped. Start it here before building.' : 'Docker Engine is unavailable. Start it on this computer.';
+        $('flash').disabled = busy || !result.usb.length || !result.isos.length;
+        $('buildHelp').textContent = 'Requires Docker running Linux containers, Git, internet, and sufficient disk space.';
+        renderCatalogStatus(catalog);
+        $('jobState').textContent = busy ? result.job.name : result.job.exit_code === 0 ? 'Complete' : result.job.exit_code === null ? 'Ready' : 'Failed';
+        $('logs').textContent = result.job.logs.length ? result.job.logs.join('\n') : 'Select packages to begin.';
+        populate($('iso'), result.isos, 'name', item => `${item.name} · ${(item.size / 1073741824).toFixed(1)} GiB`);
+        populate($('device'), result.usb, 'path', item => `${item.path} · ${item.model || 'USB disk'} · ${(item.size / 1073741824).toFixed(1)} GiB`);
+      } catch (error) { message(error.message, true); }
+    }
+    $('save').onclick = async () => { try { await save(); } catch (error) { message(error.message, true); } };
+    $('target').onchange = () => { $('packageSearch').value = ''; hideSuggestions(); suggestions = []; searchCatalog(false); refresh(); };
+    $('packageSearch').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(searchCatalog, 180); });
+    $('packageSearch').addEventListener('focus', searchCatalog);
+    $('packageSearch').addEventListener('keydown', event => {
+      if (event.key === 'Escape') { hideSuggestions(); return; }
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        if (!suggestions.length) return; event.preventDefault();
+        activeSuggestion = (activeSuggestion + (event.key === 'ArrowDown' ? 1 : -1) + suggestions.length) % suggestions.length;
+        renderSuggestions(); $('suggestions').children[activeSuggestion]?.scrollIntoView({block: 'nearest'});
+      }
+      if (event.key === 'Enter' && suggestions.length && !$('suggestions').hidden) { event.preventDefault(); addPackage(suggestions[activeSuggestion].name); }
+    });
+    document.addEventListener('click', event => { if (!event.target.closest('.searchbox')) hideSuggestions(); });
+    $('refreshCatalog').onclick = async () => { try { await api('/api/catalog/refresh', {target: $('target').value}); message('Refreshing package catalog.'); await refresh(); } catch (error) { message(error.message, true); } };
+    for (const tab of document.querySelectorAll('.tabs button')) tab.onclick = () => {
+      document.querySelectorAll('.tabs button').forEach(item => { item.classList.toggle('active', item === tab); item.setAttribute('aria-selected', String(item === tab)); });
+      document.querySelectorAll('.steps section').forEach(item => item.classList.toggle('active', item.id === tab.dataset.step));
+    };
+    $('build').onclick = async () => {
+      try { await save(); await api('/api/build', {}); message('ISO build started.'); await refresh(); }
+      catch (error) { message(error.message, true); }
+    };
+    $('startDocker').onclick = async () => {
+      try { await api('/api/docker/start', {}); message('Starting Docker Desktop. This may take a minute.'); await refresh(); }
+      catch (error) { message(error.message, true); }
+    };
+    $('flash').onclick = async () => {
+      try { await api('/api/flash', {iso: $('iso').value, device: $('device').value, confirmation: $('confirm').value}); message('USB write started.'); await refresh(); }
+      catch (error) { message(error.message, true); }
+    };
+    refresh(); setInterval(refresh, 2000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+# One pacman package per line. The web page writes your choices to packages.txt.
+firefox
